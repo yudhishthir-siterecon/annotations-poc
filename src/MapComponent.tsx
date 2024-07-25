@@ -10,6 +10,8 @@ import { Feature } from 'ol';
 import { Point } from 'ol/geom';
 import { Modal, Select, Input } from 'antd';
 
+const { Option } = Select;
+
 // Setup the base layer
 const raster = new TileLayer({
   source: new OSM(),
@@ -34,7 +36,6 @@ const vector = new VectorLayer({
     }),
   }),
 });
-const { Option } = Select;
 
 const MapComponent: React.FC = () => {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -44,7 +45,8 @@ const MapComponent: React.FC = () => {
   const [textColor, setTextColor] = useState('#000000');
   const [labelText, setLabelText] = useState('Your Label');
   const [currentPosition, setCurrentPosition] = useState<[number, number] | null>(null);
-
+  const [interactionType, setInteractionType] = useState('None');
+  
   useEffect(() => {
     if (mapRef.current) {
       const map = new Map({
@@ -56,16 +58,17 @@ const MapComponent: React.FC = () => {
         }),
       });
 
-      let draw: Draw; // Global variable for draw interaction
-
-      const typeSelect = document.getElementById('type') as HTMLSelectElement;
+      let draw: Draw | null = null; // Global variable for draw interaction
 
       const addInteraction = () => {
-        const value = typeSelect.value;
-        if (value !== 'None') {
+        if (draw) {
+          map.removeInteraction(draw);
+          map.getTargetElement().style.cursor = ''; // Reset cursor
+        }
+        if (interactionType === 'LineString') {
           draw = new Draw({
             source: source,
-            type: value as 'LineString', // Only LineString is selected
+            type: 'LineString',
             freehand: true,
             style: new Style({
               stroke: new Stroke({
@@ -80,30 +83,25 @@ const MapComponent: React.FC = () => {
             }),
           });
           map.addInteraction(draw);
-
-          // Change cursor to '+' when drawing
-          map.getTargetElement().style.cursor = 'crosshair';
+          map.getTargetElement().style.cursor = 'crosshair'; // Change cursor to crosshair when drawing
         }
       };
 
-      typeSelect.onchange = () => {
-        map.removeInteraction(draw);
-        addInteraction();
-      };
+      map.on('singleclick', (evt) => {
+        if (interactionType === 'Label') {
+          const [x, y] = evt.coordinate as [number, number];
+          setCurrentPosition([x, y]);
+          setModalIsOpen(true);
+        }
+      });
 
       addInteraction();
-
-      map.on('singleclick', (evt) => {
-        const [x, y] = evt.coordinate as [number, number];
-        setCurrentPosition([x, y]);
-        setModalIsOpen(true);
-      });
 
       return () => {
         map.setTarget(undefined);
       };
     }
-  }, []);
+  }, [interactionType]);
 
   const addLabel = () => {
     if (currentPosition) {
@@ -137,10 +135,15 @@ const MapComponent: React.FC = () => {
 
   return (
     <div>
-      <select id="type">
-        <option value="LineString">LineString</option>
-        <option value="None">None</option>
-      </select>
+      <Select
+        defaultValue="None"
+        style={{ width: 200 }}
+        onChange={(value) => setInteractionType(value)}
+      >
+        <Option value="None">None</Option>
+        <Option value="LineString">Draw Line</Option>
+        <Option value="Label">Add Label</Option>
+      </Select>
       <div ref={mapRef} style={{ width: '100%', height: '100vh' }}></div>
 
       <Modal
