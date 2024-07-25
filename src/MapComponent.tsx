@@ -1,266 +1,190 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import 'ol/ol.css';
 import { Map, View } from 'ol';
 import { Tile as TileLayer, Vector as VectorLayer } from 'ol/layer';
 import { OSM, Vector as VectorSource } from 'ol/source';
-import { Draw } from 'ol/interaction';
-import { fromLonLat, toLonLat } from 'ol/proj';
-import { Style, Stroke, Fill, Text } from 'ol/style';
-import { Feature } from 'ol';
 import { Point } from 'ol/geom';
-import { Select, Input, Button, Slider } from 'antd';
-import './MapComponent.css'; // For custom styling
-
-const { Option } = Select;
-
-// Setup the base layer
-const raster = new TileLayer({
-  source: new OSM(),
-});
-
-// Setup vector source and layer
-const source = new VectorSource({
-  wrapX: false,
-});
-
-const vector = new VectorLayer({
-  source: source,
-  style: new Style({
-    stroke: new Stroke({
-      color: '#ff6633',
-      width: 6, // Wider stroke
-      lineCap: 'round',
-      lineJoin: 'round',
-    }),
-    fill: new Fill({
-      color: 'rgba(255, 102, 51, 0.2)', // Light fill color with transparency for polygons
-    }),
-  }),
-});
+import { Feature } from 'ol';
+import { Style, Fill, Text } from 'ol/style';
+import { fromLonLat } from 'ol/proj';
+import Overlay from 'ol/Overlay';
 
 const MapComponent: React.FC = () => {
   const mapRef = useRef<HTMLDivElement>(null);
+  const vectorSource = new VectorSource();
+  const [selectedFeature, setSelectedFeature] = useState<Feature | null>(null);
+  const [inputValue, setInputValue] = useState('');
   const [fontSize, setFontSize] = useState('16px');
-  const [fontStyle, setFontStyle] = useState('sans-serif');
-  const [textColor, setTextColor] = useState('#000000');
-  const [labelText, setLabelText] = useState('');
-  const [currentPosition, setCurrentPosition] = useState<[number, number] | null>(null);
-  const [editingFeature, setEditingFeature] = useState<Feature<Point> | null>(null);
-  const [interactionType, setInteractionType] = useState('None');
-  const [backgroundColor, setBackgroundColor] = useState('rgba(255, 255, 255, 0.7)');
-  
-  useEffect(() => {
-    if (mapRef.current) {
-      const map = new Map({
-        target: mapRef.current,
-        layers: [raster, vector],
-        view: new View({
-          center: fromLonLat([-100.0, 40.0]), // Center on USA
-          zoom: 4,
+  const [fontFamily, setFontFamily] = useState('sans-serif');
+  const [fontColor, setFontColor] = useState('#ffffff');
+  const [backgroundColor, setBackgroundColor] = useState('#a83299');
+
+  const createLabelStyle = useCallback(
+    (text: string, fontSize: string, fontFamily: string, fontColor: string, backgroundColor: string) =>
+      new Style({
+        text: new Text({
+          font: `${fontSize} ${fontFamily}`,
+          text,
+          fill: new Fill({
+            color: fontColor,
+          }),
+          backgroundFill: new Fill({
+            color: backgroundColor,
+          }),
+          padding: [2, 2, 2, 2],
         }),
-      });
+      }),
+    []
+  );
 
-      let draw: Draw | null = null; // Global variable for draw interaction
+  const updateFeatureStyle = useCallback(
+    (feature: Feature) => {
+      feature.setStyle(createLabelStyle(inputValue, fontSize, fontFamily, fontColor, backgroundColor));
+      feature.set('text', inputValue);
+    },
+    [inputValue, fontSize, fontFamily, fontColor, backgroundColor, createLabelStyle]
+  );
 
-      const addInteraction = () => {
-        if (draw) {
-          map.removeInteraction(draw);
-          map.getTargetElement().style.cursor = ''; // Reset cursor
+  useEffect(() => {
+    const map = new Map({
+      target: mapRef.current!,
+      layers: [
+        new TileLayer({
+          source: new OSM(),
+        }),
+        new VectorLayer({
+          source: vectorSource,
+        }),
+      ],
+      view: new View({
+        center: fromLonLat([-98.5795, 39.8283]),
+        zoom: 4,
+      }),
+    });
+
+    const overlay = new Overlay({
+      element: document.getElementById('popup')!,
+      positioning: 'bottom-center',
+      stopEvent: false,
+    });
+    map.addOverlay(overlay);
+
+    const handleMapClick = (event: any) => {
+      const feature = map.forEachFeatureAtPixel(event.pixel, (feature) => feature as Feature);
+      if (feature) {
+        setSelectedFeature(feature);
+        const coordinate = (feature.getGeometry() as Point).getCoordinates();
+        if (coordinate) {
+          overlay.setPosition(coordinate);
         }
-        if (interactionType === 'LineString') {
-          draw = new Draw({
-            source: source,
-            type: 'LineString',
-            freehand: true,
-            style: new Style({
-              stroke: new Stroke({
-                color: '#ff0000', // Red color for drawing
-                width: 6, // Wider stroke
-                lineCap: 'round',
-                lineJoin: 'round',
-              }),
-              fill: new Fill({
-                color: 'rgba(255, 102, 51, 0.2)', // Light fill color with transparency for polygons
-              }),
-            }),
-          });
-          map.addInteraction(draw);
-          map.getTargetElement().style.cursor = 'crosshair'; // Change cursor to crosshair when drawing
-        }
-      };
-
-      map.on('singleclick', (evt) => {
-        if (interactionType === 'Label') {
-          const [x, y] = evt.coordinate as [number, number];
-          setCurrentPosition([x, y]);
-          setEditingFeature(null);
-          setLabelText('');
-        } else if (interactionType === 'None') {
-          const features = map.getFeaturesAtPixel(evt.pixel);
-          const feature = features ? features[0] : null;
-          if (feature && feature.getGeometry() instanceof Point) {
-            const labelFeature = feature as Feature<Point>;
-            setEditingFeature(labelFeature);
-            setLabelText(labelFeature.get('text') || '');
-            setFontSize(labelFeature.get('fontSize') || '16px');
-            setFontStyle(labelFeature.get('fontStyle') || 'sans-serif');
-            setTextColor(labelFeature.get('textColor') || '#000000');
-            setBackgroundColor(labelFeature.get('backgroundColor') || 'rgba(255, 255, 255, 0.7)');
+        setInputValue(feature.get('text') || '');
+        const style = feature.getStyle() as Style;
+        if (style) {
+          const textStyle = style.getText() as Text;
+          if (textStyle) {
+            const font = textStyle.getFont();
+            if (font) {
+              const [size, ...familyParts] = font.split(' ');
+              const family = familyParts.join(' ');
+              setFontSize(size);
+              setFontFamily(family);
+            }
+            const fill = textStyle.getFill();
+            if (fill) {
+              setFontColor(fill.getColor() as string);
+            }
+            const backgroundFill = textStyle.getBackgroundFill();
+            if (backgroundFill) {
+              setBackgroundColor(backgroundFill.getColor() as string);
+            }
           }
         }
-      });
+      } else {
+        const coordinate = event.coordinate;
+        const newFeature = new Feature({
+          geometry: new Point(coordinate),
+          text: '',
+        });
+        newFeature.setStyle(createLabelStyle('', fontSize, fontFamily, fontColor, backgroundColor));
+        vectorSource.addFeature(newFeature);
+        setSelectedFeature(newFeature);
+        setInputValue('');
+        setFontSize('16px');
+        setFontFamily('sans-serif');
+        setFontColor('#ffffff');
+        setBackgroundColor('#a83299');
+        overlay.setPosition(coordinate);
+      }
+    };
 
-      addInteraction();
+    map.on('click', handleMapClick);
 
-      return () => {
-        map.setTarget(undefined);
-      };
+    return () => {
+      map.setTarget(undefined);
+    };
+  }, [createLabelStyle]);
+
+  useEffect(() => {
+    if (selectedFeature) {
+      updateFeatureStyle(selectedFeature);
     }
-  }, [interactionType]);
+  }, [inputValue, fontSize, fontFamily, fontColor, backgroundColor, selectedFeature, updateFeatureStyle]);
 
-  const addLabel = () => {
-    if (currentPosition && !editingFeature) {
-      const labelFeature = new Feature({
-        geometry: new Point(currentPosition),
-        text: labelText,
-        fontSize: fontSize,
-        fontStyle: fontStyle,
-        textColor: textColor,
-        backgroundColor: backgroundColor,
-      });
-
-      labelFeature.setStyle(
-        new Style({
-          text: new Text({
-            font: `${fontSize} ${fontStyle}`,
-            text: labelText,
-            fill: new Fill({
-              color: textColor,
-            }),
-            backgroundFill: new Fill({
-              color: backgroundColor,
-            }),
-            padding: [5, 5, 5, 5],
-            textAlign: 'center',
-          }),
-        })
-      );
-
-      source.addFeature(labelFeature);
-      setEditingFeature(labelFeature); // Set the newly created feature as the editing feature
-      setCurrentPosition(null); // Clear the current position to remove the editable label box
-    } else if (editingFeature) {
-      editingFeature.set('text', labelText);
-      editingFeature.set('fontSize', fontSize);
-      editingFeature.set('fontStyle', fontStyle);
-      editingFeature.set('textColor', textColor);
-      editingFeature.set('backgroundColor', backgroundColor);
-      editingFeature.setStyle(
-        new Style({
-          text: new Text({
-            font: `${fontSize} ${fontStyle}`,
-            text: labelText,
-            fill: new Fill({
-              color: textColor,
-            }),
-            backgroundFill: new Fill({
-              color: backgroundColor,
-            }),
-            padding: [5, 5, 5, 5],
-            textAlign: 'center',
-          }),
-        })
-      );
-    }
+  const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(event.target.value);
   };
 
-  const deleteLabel = () => {
-    if (editingFeature) {
-      source.removeFeature(editingFeature);
-    }
-    setEditingFeature(null);
+  const handleFontSizeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setFontSize(event.target.value);
   };
 
-  const clearLabels = () => {
-    source.clear();
+  const handleFontFamilyChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setFontFamily(event.target.value);
+  };
+
+  const handleFontColorChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setFontColor(event.target.value);
+  };
+
+  const handleBackgroundColorChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setBackgroundColor(event.target.value);
   };
 
   return (
-    <div className="map-container">
-      <div className="sidebar">
-        <Select
-          defaultValue="None"
-          style={{ width: '100%' }}
-          onChange={(value) => setInteractionType(value)}
-        >
-          <Option value="None">None</Option>
-          <Option value="LineString">Draw Line</Option>
-          <Option value="Label">Add Label</Option>
-        </Select>
-        <Button onClick={clearLabels} style={{ width: '100%', marginTop: 10 }}>
-          Clear Labels
-        </Button>
-        <div style={{ marginTop: 20 }}>
-          <label>Font Size:</label>
-          <Slider
-            min={8}
-            max={72}
-            value={parseInt(fontSize, 10)}
-            onChange={(value) => setFontSize(`${value}px`)}
-          />
-        </div>
-        <div style={{ marginTop: 20 }}>
-          <label>Font Style:</label>
-          <Select value={fontStyle} style={{ width: '100%' }} onChange={(value) => setFontStyle(value)}>
-            <Option value="sans-serif">Sans-serif</Option>
-            <Option value="serif">Serif</Option>
-            <Option value="monospace">Monospace</Option>
-          </Select>
-        </div>
-        <div style={{ marginTop: 20 }}>
-          <label>Text Color:</label>
-          <Input
-            type="color"
-            value={textColor}
-            onChange={(e) => setTextColor(e.target.value)}
-          />
-        </div>
-        <div style={{ marginTop: 20 }}>
-          <label>Background Color:</label>
-          <Input
-            type="color"
-            value={backgroundColor}
-            onChange={(e) => setBackgroundColor(e.target.value)}
-          />
-        </div>
-        <div style={{ marginTop: 20 }}>
-          <Button onClick={deleteLabel} danger style={{ width: '100%' }}>
-            Delete Label
-          </Button>
-        </div>
-      </div>
-      <div ref={mapRef} className="map" />
-      {currentPosition && (
-        <div
-          contentEditable
-          suppressContentEditableWarning
-          className="editable-label"
-          style={{
-            left: `${currentPosition[0]}px`,
-            top: `${currentPosition[1]}px`,
-            fontSize: fontSize,
-            fontFamily: fontStyle,
-            color: textColor,
-            backgroundColor: backgroundColor,
-            position: 'absolute',
-            zIndex: 1000,
-          }}
-          onInput={(e) => setLabelText((e.target as HTMLDivElement).innerText)}
-          onBlur={addLabel}
-        >
-          {labelText}
+    <div>
+      <div ref={mapRef} className="map" style={{ width: '100vw', height: '100vh' }}></div>
+      {selectedFeature && (
+        <div id="popup" className="popup">
+          <input type="text" value={inputValue} onChange={handleInputChange} placeholder="Text" />
+          <input type="text" value={fontSize} onChange={handleFontSizeChange} placeholder="Font Size" />
+          <input type="text" value={fontFamily} onChange={handleFontFamilyChange} placeholder="Font Family" />
+          <input type="color" value={fontColor} onChange={handleFontColorChange} placeholder="Font Color" />
+          <input type="color" value={backgroundColor} onChange={handleBackgroundColorChange} placeholder="Background Color" />
         </div>
       )}
+      <style>
+        {`
+          .map {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+          }
+          .popup {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 10px;
+            border: 1px solid black;
+            border-radius: 3px;
+            z-index: 1000;
+          }
+          .popup input {
+            display: block;
+            margin: 5px 0;
+          }
+        `}
+      </style>
     </div>
   );
 };
