@@ -4,7 +4,7 @@ import { Map, View } from 'ol';
 import { Tile as TileLayer, Vector as VectorLayer } from 'ol/layer';
 import { OSM, Vector as VectorSource } from 'ol/source';
 import { Draw } from 'ol/interaction';
-import { fromLonLat } from 'ol/proj';
+import { fromLonLat, toLonLat } from 'ol/proj';
 import { Style, Stroke, Fill, Text } from 'ol/style';
 import { Feature } from 'ol';
 import { Point } from 'ol/geom';
@@ -43,10 +43,11 @@ const MapComponent: React.FC = () => {
   const [fontSize, setFontSize] = useState('16px');
   const [fontStyle, setFontStyle] = useState('sans-serif');
   const [textColor, setTextColor] = useState('#000000');
-  const [labelText, setLabelText] = useState('Your Label');
+  const [labelText, setLabelText] = useState('');
   const [currentPosition, setCurrentPosition] = useState<[number, number] | null>(null);
   const [editingFeature, setEditingFeature] = useState<Feature<Point> | null>(null);
   const [interactionType, setInteractionType] = useState('None');
+  const [backgroundColor, setBackgroundColor] = useState('rgba(255, 255, 255, 0.7)');
   
   useEffect(() => {
     if (mapRef.current) {
@@ -93,6 +94,7 @@ const MapComponent: React.FC = () => {
           const [x, y] = evt.coordinate as [number, number];
           setCurrentPosition([x, y]);
           setEditingFeature(null);
+          setLabelText('');
         } else if (interactionType === 'None') {
           const features = map.getFeaturesAtPixel(evt.pixel);
           const feature = features ? features[0] : null;
@@ -103,6 +105,7 @@ const MapComponent: React.FC = () => {
             setFontSize(labelFeature.get('fontSize') || '16px');
             setFontStyle(labelFeature.get('fontStyle') || 'sans-serif');
             setTextColor(labelFeature.get('textColor') || '#000000');
+            setBackgroundColor(labelFeature.get('backgroundColor') || 'rgba(255, 255, 255, 0.7)');
           }
         }
       });
@@ -123,6 +126,7 @@ const MapComponent: React.FC = () => {
         fontSize: fontSize,
         fontStyle: fontStyle,
         textColor: textColor,
+        backgroundColor: backgroundColor,
       });
 
       labelFeature.setStyle(
@@ -134,7 +138,7 @@ const MapComponent: React.FC = () => {
               color: textColor,
             }),
             backgroundFill: new Fill({
-              color: 'rgba(255, 255, 255, 0.7)',
+              color: backgroundColor,
             }),
             padding: [5, 5, 5, 5],
             textAlign: 'center',
@@ -143,11 +147,14 @@ const MapComponent: React.FC = () => {
       );
 
       source.addFeature(labelFeature);
+      setEditingFeature(labelFeature); // Set the newly created feature as the editing feature
+      setCurrentPosition(null); // Clear the current position to remove the editable label box
     } else if (editingFeature) {
       editingFeature.set('text', labelText);
       editingFeature.set('fontSize', fontSize);
       editingFeature.set('fontStyle', fontStyle);
       editingFeature.set('textColor', textColor);
+      editingFeature.set('backgroundColor', backgroundColor);
       editingFeature.setStyle(
         new Style({
           text: new Text({
@@ -157,7 +164,7 @@ const MapComponent: React.FC = () => {
               color: textColor,
             }),
             backgroundFill: new Fill({
-              color: 'rgba(255, 255, 255, 0.7)',
+              color: backgroundColor,
             }),
             padding: [5, 5, 5, 5],
             textAlign: 'center',
@@ -165,9 +172,6 @@ const MapComponent: React.FC = () => {
         })
       );
     }
-
-    setCurrentPosition(null);
-    setEditingFeature(null);
   };
 
   const deleteLabel = () => {
@@ -222,6 +226,14 @@ const MapComponent: React.FC = () => {
           />
         </div>
         <div style={{ marginTop: 20 }}>
+          <label>Background Color:</label>
+          <Input
+            type="color"
+            value={backgroundColor}
+            onChange={(e) => setBackgroundColor(e.target.value)}
+          />
+        </div>
+        <div style={{ marginTop: 20 }}>
           <Button onClick={deleteLabel} danger style={{ width: '100%' }}>
             Delete Label
           </Button>
@@ -239,6 +251,9 @@ const MapComponent: React.FC = () => {
             fontSize: fontSize,
             fontFamily: fontStyle,
             color: textColor,
+            backgroundColor: backgroundColor,
+            position: 'absolute',
+            zIndex: 1000,
           }}
           onInput={(e) => setLabelText((e.target as HTMLDivElement).innerText)}
           onBlur={addLabel}

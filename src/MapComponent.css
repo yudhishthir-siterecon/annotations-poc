@@ -15,12 +15,11 @@
   }
   
   .editable-label {
-    position: absolute;
-    background-color: rgba(255, 255, 255, 0.7);
     padding: 5px;
     border: 1px solid #ddd;
     border-radius: 3px;
     cursor: text;
-    z-index: 1000;
+    min-width: 100px; /* Minimum width to make it visible initially */
+    min-height: 30px; /* Minimum height to make it visible initially */
   }
   
