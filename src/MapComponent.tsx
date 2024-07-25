@@ -8,7 +8,8 @@ import { fromLonLat } from 'ol/proj';
 import { Style, Stroke, Fill, Text } from 'ol/style';
 import { Feature } from 'ol';
 import { Point } from 'ol/geom';
-import { Modal, Select, Input } from 'antd';
+import { Select, Input, Button, Slider } from 'antd';
+import './MapComponent.css'; // For custom styling
 
 const { Option } = Select;
 
@@ -39,12 +40,12 @@ const vector = new VectorLayer({
 
 const MapComponent: React.FC = () => {
   const mapRef = useRef<HTMLDivElement>(null);
-  const [modalIsOpen, setModalIsOpen] = useState(false);
   const [fontSize, setFontSize] = useState('16px');
   const [fontStyle, setFontStyle] = useState('sans-serif');
   const [textColor, setTextColor] = useState('#000000');
   const [labelText, setLabelText] = useState('Your Label');
   const [currentPosition, setCurrentPosition] = useState<[number, number] | null>(null);
+  const [editingFeature, setEditingFeature] = useState<Feature<Point> | null>(null);
   const [interactionType, setInteractionType] = useState('None');
   
   useEffect(() => {
@@ -91,7 +92,18 @@ const MapComponent: React.FC = () => {
         if (interactionType === 'Label') {
           const [x, y] = evt.coordinate as [number, number];
           setCurrentPosition([x, y]);
-          setModalIsOpen(true);
+          setEditingFeature(null);
+        } else if (interactionType === 'None') {
+          const features = map.getFeaturesAtPixel(evt.pixel);
+          const feature = features ? features[0] : null;
+          if (feature && feature.getGeometry() instanceof Point) {
+            const labelFeature = feature as Feature<Point>;
+            setEditingFeature(labelFeature);
+            setLabelText(labelFeature.get('text') || '');
+            setFontSize(labelFeature.get('fontSize') || '16px');
+            setFontStyle(labelFeature.get('fontStyle') || 'sans-serif');
+            setTextColor(labelFeature.get('textColor') || '#000000');
+          }
         }
       });
 
@@ -104,9 +116,13 @@ const MapComponent: React.FC = () => {
   }, [interactionType]);
 
   const addLabel = () => {
-    if (currentPosition) {
+    if (currentPosition && !editingFeature) {
       const labelFeature = new Feature({
         geometry: new Point(currentPosition),
+        text: labelText,
+        fontSize: fontSize,
+        fontStyle: fontStyle,
+        textColor: textColor,
       });
 
       labelFeature.setStyle(
@@ -127,72 +143,109 @@ const MapComponent: React.FC = () => {
       );
 
       source.addFeature(labelFeature);
+    } else if (editingFeature) {
+      editingFeature.set('text', labelText);
+      editingFeature.set('fontSize', fontSize);
+      editingFeature.set('fontStyle', fontStyle);
+      editingFeature.set('textColor', textColor);
+      editingFeature.setStyle(
+        new Style({
+          text: new Text({
+            font: `${fontSize} ${fontStyle}`,
+            text: labelText,
+            fill: new Fill({
+              color: textColor,
+            }),
+            backgroundFill: new Fill({
+              color: 'rgba(255, 255, 255, 0.7)',
+            }),
+            padding: [5, 5, 5, 5],
+            textAlign: 'center',
+          }),
+        })
+      );
     }
 
-    setModalIsOpen(false);
     setCurrentPosition(null);
+    setEditingFeature(null);
+  };
+
+  const deleteLabel = () => {
+    if (editingFeature) {
+      source.removeFeature(editingFeature);
+    }
+    setEditingFeature(null);
+  };
+
+  const clearLabels = () => {
+    source.clear();
   };
 
   return (
-    <div>
-      <Select
-        defaultValue="None"
-        style={{ width: 200 }}
-        onChange={(value) => setInteractionType(value)}
-      >
-        <Option value="None">None</Option>
-        <Option value="LineString">Draw Line</Option>
-        <Option value="Label">Add Label</Option>
-      </Select>
-      <div ref={mapRef} style={{ width: '100%', height: '100vh' }}></div>
-
-      <Modal
-        title="Label Settings"
-        visible={modalIsOpen}
-        onOk={addLabel}
-        onCancel={() => setModalIsOpen(false)}
-      >
-        <div>
-          <label>
-            Font Size:
-            <Input
-              type="text"
-              value={fontSize}
-              onChange={(e) => setFontSize(e.target.value)}
-            />
-          </label>
+    <div className="map-container">
+      <div className="sidebar">
+        <Select
+          defaultValue="None"
+          style={{ width: '100%' }}
+          onChange={(value) => setInteractionType(value)}
+        >
+          <Option value="None">None</Option>
+          <Option value="LineString">Draw Line</Option>
+          <Option value="Label">Add Label</Option>
+        </Select>
+        <Button onClick={clearLabels} style={{ width: '100%', marginTop: 10 }}>
+          Clear Labels
+        </Button>
+        <div style={{ marginTop: 20 }}>
+          <label>Font Size:</label>
+          <Slider
+            min={8}
+            max={72}
+            value={parseInt(fontSize, 10)}
+            onChange={(value) => setFontSize(`${value}px`)}
+          />
         </div>
-        <div>
-          <label>
-            Font Style:
-            <Select value={fontStyle} onChange={(value) => setFontStyle(value)}>
-              <Option value="sans-serif">Sans-serif</Option>
-              <Option value="serif">Serif</Option>
-              <Option value="monospace">Monospace</Option>
-            </Select>
-          </label>
+        <div style={{ marginTop: 20 }}>
+          <label>Font Style:</label>
+          <Select value={fontStyle} style={{ width: '100%' }} onChange={(value) => setFontStyle(value)}>
+            <Option value="sans-serif">Sans-serif</Option>
+            <Option value="serif">Serif</Option>
+            <Option value="monospace">Monospace</Option>
+          </Select>
         </div>
-        <div>
-          <label>
-            Text Color:
-            <Input
-              type="color"
-              value={textColor}
-              onChange={(e) => setTextColor(e.target.value)}
-            />
-          </label>
+        <div style={{ marginTop: 20 }}>
+          <label>Text Color:</label>
+          <Input
+            type="color"
+            value={textColor}
+            onChange={(e) => setTextColor(e.target.value)}
+          />
         </div>
-        <div>
-          <label>
-            Label Text:
-            <Input
-              type="text"
-              value={labelText}
-              onChange={(e) => setLabelText(e.target.value)}
-            />
-          </label>
+        <div style={{ marginTop: 20 }}>
+          <Button onClick={deleteLabel} danger style={{ width: '100%' }}>
+            Delete Label
+          </Button>
         </div>
-      </Modal>
+      </div>
+      <div ref={mapRef} className="map" />
+      {currentPosition && (
+        <div
+          contentEditable
+          suppressContentEditableWarning
+          className="editable-label"
+          style={{
+            left: `${currentPosition[0]}px`,
+            top: `${currentPosition[1]}px`,
+            fontSize: fontSize,
+            fontFamily: fontStyle,
+            color: textColor,
+          }}
+          onInput={(e) => setLabelText((e.target as HTMLDivElement).innerText)}
+          onBlur={addLabel}
+        >
+          {labelText}
+        </div>
+      )}
     </div>
   );
 };
