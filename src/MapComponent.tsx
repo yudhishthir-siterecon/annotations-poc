@@ -18,9 +18,10 @@ const MapComponent: React.FC = () => {
   const [fontFamily, setFontFamily] = useState('sans-serif');
   const [fontColor, setFontColor] = useState('#ffffff');
   const [backgroundColor, setBackgroundColor] = useState('#a83299');
+  const [rotation, setRotation] = useState(0); // Angle in degrees
 
   const createLabelStyle = useCallback(
-    (text: string, fontSize: string, fontFamily: string, fontColor: string, backgroundColor: string) =>
+    (text: string, fontSize: string, fontFamily: string, fontColor: string, backgroundColor: string, rotation: number) =>
       new Style({
         text: new Text({
           font: `${fontSize} ${fontFamily}`,
@@ -32,6 +33,7 @@ const MapComponent: React.FC = () => {
             color: backgroundColor,
           }),
           padding: [2, 2, 2, 2],
+          rotation: rotation * (Math.PI / 180), // Convert to radians
         }),
       }),
     []
@@ -39,10 +41,11 @@ const MapComponent: React.FC = () => {
 
   const updateFeatureStyle = useCallback(
     (feature: Feature) => {
-      feature.setStyle(createLabelStyle(inputValue, fontSize, fontFamily, fontColor, backgroundColor));
+      feature.setStyle(createLabelStyle(inputValue, fontSize, fontFamily, fontColor, backgroundColor, rotation));
       feature.set('text', inputValue);
+      feature.set('rotation', rotation);
     },
-    [inputValue, fontSize, fontFamily, fontColor, backgroundColor, createLabelStyle]
+    [inputValue, fontSize, fontFamily, fontColor, backgroundColor, rotation, createLabelStyle]
   );
 
   useEffect(() => {
@@ -97,6 +100,12 @@ const MapComponent: React.FC = () => {
             if (backgroundFill) {
               setBackgroundColor(backgroundFill.getColor() as string);
             }
+            const rotation = textStyle.getRotation();
+            if (rotation !== undefined) {
+              setRotation(rotation * (180 / Math.PI)); // Convert to degrees
+            } else {
+              setRotation(0);
+            }
           }
         }
       } else {
@@ -105,7 +114,7 @@ const MapComponent: React.FC = () => {
           geometry: new Point(coordinate),
           text: '',
         });
-        newFeature.setStyle(createLabelStyle('', fontSize, fontFamily, fontColor, backgroundColor));
+        newFeature.setStyle(createLabelStyle('', fontSize, fontFamily, fontColor, backgroundColor, 0));
         vectorSource.addFeature(newFeature);
         setSelectedFeature(newFeature);
         setInputValue('');
@@ -113,6 +122,7 @@ const MapComponent: React.FC = () => {
         setFontFamily('sans-serif');
         setFontColor('#ffffff');
         setBackgroundColor('#a83299');
+        setRotation(0);
         overlay.setPosition(coordinate);
       }
     };
@@ -128,7 +138,7 @@ const MapComponent: React.FC = () => {
     if (selectedFeature) {
       updateFeatureStyle(selectedFeature);
     }
-  }, [inputValue, fontSize, fontFamily, fontColor, backgroundColor, selectedFeature, updateFeatureStyle]);
+  }, [inputValue, fontSize, fontFamily, fontColor, backgroundColor, rotation, selectedFeature, updateFeatureStyle]);
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setInputValue(event.target.value);
@@ -150,6 +160,10 @@ const MapComponent: React.FC = () => {
     setBackgroundColor(event.target.value);
   };
 
+  const handleRotationChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRotation(parseFloat(event.target.value));
+  };
+
   return (
     <div>
       <div ref={mapRef} className="map" style={{ width: '100vw', height: '100vh' }}></div>
@@ -160,6 +174,7 @@ const MapComponent: React.FC = () => {
           <input type="text" value={fontFamily} onChange={handleFontFamilyChange} placeholder="Font Family" />
           <input type="color" value={fontColor} onChange={handleFontColorChange} placeholder="Font Color" />
           <input type="color" value={backgroundColor} onChange={handleBackgroundColorChange} placeholder="Background Color" />
+          <input type="number" value={rotation} onChange={handleRotationChange} placeholder="Rotation Angle (degrees)" />
         </div>
       )}
       <style>
