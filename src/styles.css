@@ -1,0 +1,87 @@
+.note-overlay-container {
+  position: relative;
+}
+
+.note {
+  position: relative;
+  background: #d64045;
+  border: 1px solid black;
+  padding: 10px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.note.active {
+  border: 2px solid yellow;
+}
+
+.note textarea {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: white;
+}
+
+.resize-dots {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.resize-dot {
+  width: 10px;
+  height: 10px;
+  background: yellow;
+  position: absolute;
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.resize-dot.top-left {
+  top: -5px;
+  left: -5px;
+  cursor: nwse-resize;
+}
+
+.resize-dot.top-right {
+  top: -5px;
+  right: -5px;
+  cursor: nesw-resize;
+}
+
+.resize-dot.bottom-left {
+  bottom: -5px;
+  left: -5px;
+  cursor: nesw-resize;
+}
+
+.resize-dot.bottom-right {
+  bottom: -5px;
+  right: -5px;
+  cursor: nwse-resize;
+}
+
+.rotate-handle {
+  width: 20px;
+  height: 20px;
+  background: url('https://img.icons8.com/?size=100&id=100038&format=png&color=000000') no-repeat center center; /* Use an appropriate rotate icon */
+  background-size: contain;
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  cursor: grab;
+  pointer-events: all;
+}
+
+.note:hover .rotate-handle {
+  display: block;
+}
+
+.rotate-handle:active {
+  cursor: grabbing;
+}

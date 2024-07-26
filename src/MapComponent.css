@@ -1,25 +1,31 @@
-.map-container {
-    display: flex;
-  }
-  
-  .sidebar {
-    width: 250px;
-    padding: 20px;
-    background-color: white;
-    border-right: 1px solid #ddd;
-  }
-  
-  .map {
-    flex: 1;
-    height: 100vh;
-  }
-  
-  .editable-label {
-    padding: 5px;
-    border: 1px solid #ddd;
-    border-radius: 3px;
-    cursor: text;
-    min-width: 100px; /* Minimum width to make it visible initially */
-    min-height: 30px; /* Minimum height to make it visible initially */
-  }
-  
+.note-overlay-container {
+  position: relative;
+}
+
+.note {
+  position: relative;
+  background: white;
+  border: 1px solid black;
+  padding: 10px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+.note textarea {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+}
+
+.controls {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  display: flex;
+  flex-direction: column;
+}
+
+.controls input {
+  margin-top: 5px;
+}
